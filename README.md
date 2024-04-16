@@ -1,6 +1,9 @@
 # What does this thing do?
 
-1. scans AWS for any running EC2 instances with the name "bm_server"
+1. scans AWS for any running EC2 instances with the name "bm_server", by running:
+```
+source config.sh
+```
 2. if it does not exist, a new one is created with an Ubuntu ami, using t4g.nano (the cheapest available). user data is passed as cloud-config file which has utilities for writing data to configuration files, setting up the server, cloning repositories and initializing a database. the public key from requesting system is also passed to the config so that the user can log in securely without a .pem file. file is passed as plain text instead of from file, to easier pass environment variables from linux system to it.
 
 ## What technologies are utilized?
