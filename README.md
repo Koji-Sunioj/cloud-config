@@ -1,6 +1,6 @@
 # What does this thing do?
 
-1. scans AWS for any running EC2 instances with the name "bm_server", by running:
+1. scans AWS for any running EC2 instances with the name "bm_server" (under the credentials of the AWS user set by the system), by running:
 ```
 source config.sh
 ```
