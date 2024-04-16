@@ -29,6 +29,7 @@ Then pasting in the values:
 export FE_SECRET=whateveryouwant
 export DB_PASSWORD=whateveryouwant2
 export GUEST_LIST=whateveryouwant3
+export ROOT_DB_PASSWORD=whateveryouwant4
 ```
 ... and finally running the file to load those values:
 ```

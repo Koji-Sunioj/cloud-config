@@ -53,9 +53,9 @@ runcmd:
  - git clone https://github.com/Koji-Sunioj/nginx-api.git /home/ubuntu/nginx-api
  - cd /home/ubuntu/nginx-api
  - pip install -r requirements.txt
- - sudo -u postgres psql -c "alter user postgres with password 'Karelia';"
- - echo 'localhost:5432:postgres:postgres:Karelia' >> \$HOME/.pgpass
- - echo 'localhost:5432:blackmetal:postgres:Karelia' >> \$HOME/.pgpass
+ - sudo -u postgres psql -c "alter user postgres with password '${ROOT_DB_PASSWORD}';"
+ - echo 'localhost:5432:postgres:postgres:${ROOT_DB_PASSWORD}' >> \$HOME/.pgpass
+ - echo 'localhost:5432:blackmetal:postgres:${ROOT_DB_PASSWORD}' >> \$HOME/.pgpass
  - chmod 0600 \$HOME/.pgpass
  - export PGPASSFILE="\$HOME/.pgpass"
  - psql -U postgres -h localhost -d postgres -a -f init.sql
