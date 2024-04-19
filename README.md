@@ -4,8 +4,12 @@
 ```
 source config.sh
 ```
-2. if it does not exist, a new one is created with an Ubuntu ami, using t4g.nano (the cheapest available). user data is passed as cloud-config file which has utilities for writing data to configuration files, setting up the server, cloning repositories and initializing a database. the public key from requesting system is also passed to the config so that the user can log in securely without a .pem file. file is passed as plain text instead of from file, to easier pass environment variables from linux system to it.
+2. if it does not exist, a new one is created with an Ubuntu ami, using t4g.nano (the cheapest available). user data is passed as cloud-config file which has utilities for writing data to configuration files, setting up the server, cloning repositories and initializing a database. the public key from requesting system is also passed to the config so that the user can log in securely without a .pem file. file is passed as plain text instead of from file, to easier pass environment variables from linux system to it (and for me and you to visualize things).
 
+3. in progress: checking when cloud-config is finished, initating another EC2 instance in the same VPC, then configuring the nginx configuration file to forward API requests to the previously created instance's ipv4.
+
+cloud-config normally takes 1-2 minutes to complete.
+i
 ## What technologies are utilized?
 
 1. [Cloud-init](https://cloudinit.readthedocs.io/en/latest/reference/examples.html) - standard for cross-platform instance initialization - a more streamlined way to set things up instead of using a list of linux commands, although this also uses commands. 

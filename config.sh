@@ -2,28 +2,30 @@
 export LC_ALL=C.UTF-8
 
 CheckState() {
-        running=0
-        instance_state=$(aws ec2 describe-instances --instance-ids $1 \
-                --query 'Reservations[].Instances[].State.Name' --output text)
+        init_done=0
+        raw_status=$(ssh ubuntu@$1 -o StrictHostKeyChecking=no cloud-init status)
+        echo "$raw_status... at $(date +"%T")"
+        init_status="${raw_status##*: }"
 
-        case $instance_state in
+        case $init_status in
 
-                pending)
-                echo "instance in pending state"
+                "done")
+                init_done=1
                 ;;
 
-                running)
-                echo "instance is running"
-                running=1
+                "running" | "not started")
+                ;;
+
+                *)
                 ;;
         esac
-        return $running
+        return $init_done
 
 }
 
 bm_instances=$(aws ec2 describe-instances  --query 'Reservations[].Instances[]' \
 	--filters Name=instance-state-name,Values=running Name=tag:Name,Values=bm_server | jq length)
-running=0
+config_done=0
 new_bm_instance=""
 pub_key=$(cat ~/.ssh/id_rsa.pub)
 config=$(cat <<LINE
@@ -65,7 +67,7 @@ runcmd:
  - rm /etc/nginx/sites-enabled/default
  - ln -s /etc/nginx/sites-available/fast-api.conf /etc/nginx/sites-enabled/fast-api.conf
  - nginx -s reload
- - python3 -m uvicorn fast:app --reload
+ - gunicorn -k uvicorn.workers.UvicornWorker -D fast:app
 
 users:
   - default
@@ -75,31 +77,33 @@ users:
 LINE
 )
 
-echo $config
-
 if [[ $bm_instances == 0 ]]
 then
-        new_bm_instance=$(aws ec2 run-instances --count 1 --image-id ami-0c3d6a10a198d282d \
-                --security-group-ids sg-0c6e934d0f8aa9a8e --instance-type t4g.nano \
-                --output text --query 'Instances[].InstanceId' \
-                --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=bm_server}]'\
-		--user-data="$config")
+    new_bm_instance=$(aws ec2 run-instances --count 1 --image-id ami-0c3d6a10a198d282d \
+            --security-group-ids sg-0c6e934d0f8aa9a8e --instance-type t4g.nano \
+            --output text --query 'Instances[].InstanceId' \
+            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=bm_server}]'\
+    --user-data="$config")
 
-	echo "$new_bm_instance initialized"
+    echo "$new_bm_instance initialized"
+    
+    bm_instance_dns=$(aws ec2 describe-instances --instance-ids $new_bm_instance \
+    --query 'Reservations[].Instances[].PublicDnsName' --output text)
 
-	while [ $running == 0 ]
-	do
-		echo "waiting for instance to run before login"
-		sleep 5s
-		CheckState $new_bm_instance
-		running=$?
-	done
+    echo "$bm_instance_dns booting"
+
+    while [ $config_done == 0 ]
+    do
+        sleep 5s
+        CheckState $bm_instance_dns
+        config_done=$?
+    done
 fi
 
 if [[ $running == 1 ]]
 then
-	bm_instance_dns=$(aws ec2 describe-instances --instance-ids $new_bm_instance \
-		--query 'Reservations[].Instances[].PublicDnsName' --output text)
-	echo "$new_bm_instance ready to login via: ubuntu@$bm_instance_dns"
+    echo "ready"
+    bm_server_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_instance \ 
+        --query 'Reservations[].Instances[].PublicIpAddress' --output text)
 fi
 
