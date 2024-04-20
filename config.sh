@@ -62,7 +62,7 @@ write_files:
      server {
         listen 80;
         location / {
-                proxy_pass http://127.0.0.1:8000;
+             proxy_pass http://127.0.0.1:8000;
         }
      }
 
@@ -153,7 +153,7 @@ users:
 LINE
 )
 
-if [[ ${#bm_api_ipv4} > 1 ]] && [[ $api_config_done == 1 ]]
+if [[ ${#bm_api_ipv4} > 0 ]] && [[ $api_config_done == 1 ]]
 then
     echo "ready to configure front end instance with ipv4 from rest API $new_bm_api_id with ip $bm_api_ipv4"
 
@@ -176,13 +176,29 @@ then
         CheckState $bm_frontend_dns
         frontend_config_done=$?
     done
+
+    if [[ $frontend_config_done == 1 ]]
+    then
+        frontend_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_frontend_id \
+            --query 'Reservations[].Instances[].PublicIpAddress' --output text)
+    fi
 fi
 
+deny_commands=$(cat <<LINE
+sed -i '\''/8000;/a\\\tallow ${frontend_ipv4};\n\tdeny all;'\'' /etc/nginx/sites-available/fast-api.conf
+nginx -s reload
+LINE
+)
 
-if [[ $frontend_config_done == 1 ]]
+if [[ ${#frontend_ipv4} > 0 ]] && [[ $frontend_config_done == 1 ]]
 then   
-    frontend_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_frontend_id \
-        --query 'Reservations[].Instances[].PublicIpAddress' --output text)
-
-    echo "everything done. front end running at: $frontend_ipv4"
+    echo "whitelisting connectivity between $frontend_ipv4 to $bm_api_ipv4"
+    ssh ubuntu@$bm_api_dns "/usr/bin/sudo bash -c '$deny_commands'"
+    echo "everything done."
 fi
+
+
+
+
+
+

@@ -1,14 +1,16 @@
 # What does this thing do?
 
-1. scans AWS for any running EC2 instances with the name "bm_server" (under the credentials of the AWS user set by the system), by running:
+1. scans AWS for any running EC2 instances with the name "bm_api" and "bm_frontend" (under the credentials of the AWS user set by the system), by running:
 ```
 source config.sh
 ```
-2. if it does not exist, a new one is created with an Ubuntu ami, using t4g.nano (the cheapest available). user data is passed as cloud-config file which has utilities for writing data to configuration files, setting up the server, cloning repositories and initializing a database. the public key from requesting system is also passed to the config so that the user can log in securely without a .pem file. file is passed as plain text instead of from file, to easier pass environment variables from linux system to it (and for me and you to visualize things).
+2. if it does not exist, a series of commands are executed for launching two instances with inter-dependencies: "bm_api" instance will act as the rest API for the "bm_frontend" instance, whitelisting it's ipv4 address. "bm_frontend" will forward all api requests to the "bm_api" instance's ipv4 address including authentication.
 
-3. in progress: checking when cloud-config is finished, initating another EC2 instance in the same VPC, then configuring nginx to forward API requests to the previously created instance's ipv4.
+## How exactly is that done? 
 
-cloud-config normally takes 1-2 minutes to complete.
+AWS Cli has a command for running instances, and accepts "user-data" which can be commands for iniliazing whatever libraries, packages or software is desired. in this case, the "user-data" is Cloud-init configuration data, which is a more streamlined solution for settings things up. essentially, the bash script waits for the rest API to be initaliazed completely (cloning repos, setting up nginx, fast-api server and sql database) then proceeds to create an instance with the front end code. 
+
+Cloud-init takes about two minutes maximum for it to complete.
 
 ## What technologies are utilized?
 
