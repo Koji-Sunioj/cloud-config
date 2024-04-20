@@ -23,12 +23,27 @@ CheckState() {
 
 }
 
-bm_instances=$(aws ec2 describe-instances  --query 'Reservations[].Instances[]' \
-	--filters Name=instance-state-name,Values=running Name=tag:Name,Values=bm_server | jq length)
-config_done=0
-new_bm_instance=""
+bm_apis=$(aws ec2 describe-instances  --query 'Reservations[].Instances[]' \
+	--filters Name=instance-state-name,Values=running Name=tag:Name,Values=bm_api | jq length)
+
+bm_frontends=$(aws ec2 describe-instances  --query 'Reservations[].Instances[]' \
+	--filters Name=instance-state-name,Values=running Name=tag:Name,Values=bm_frontend | jq length)
+
+api_config_done=0
+
+frontend_config_done=0
+
+new_bm_api_id=""
+
+new_bm_frontend_id=""
+
+bm_api_ipv4=""
+
+frontend_ipv4=""
+
 pub_key=$(cat ~/.ssh/id_rsa.pub)
-config=$(cat <<LINE
+
+api_config=$(cat <<LINE
 #cloud-config
 
 package_update: true
@@ -77,33 +92,97 @@ users:
 LINE
 )
 
-if [[ $bm_instances == 0 ]]
+
+
+
+if [[ $bm_apis == 0 ]] && [[ $bm_frontends == 0 ]]
 then
-    new_bm_instance=$(aws ec2 run-instances --count 1 --image-id ami-0c3d6a10a198d282d \
-            --security-group-ids sg-0c6e934d0f8aa9a8e --instance-type t4g.nano \
-            --output text --query 'Instances[].InstanceId' \
-            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=bm_server}]'\
-    --user-data="$config")
+    new_bm_api_id=$(aws ec2 run-instances --count 1 --image-id ami-0c3d6a10a198d282d \
+        --security-group-ids sg-0c6e934d0f8aa9a8e --instance-type t4g.nano \
+        --output text --query 'Instances[].InstanceId' \
+        --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=bm_api}]'\
+        --user-data="$api_config")
 
-    echo "$new_bm_instance initialized"
+    echo "rest API instance $new_bm_api_id initialized"
     
-    bm_instance_dns=$(aws ec2 describe-instances --instance-ids $new_bm_instance \
-    --query 'Reservations[].Instances[].PublicDnsName' --output text)
+    bm_api_dns=$(aws ec2 describe-instances --instance-ids $new_bm_api_id \
+        --query 'Reservations[].Instances[].PublicDnsName' --output text)
 
-    echo "$bm_instance_dns booting"
+    echo "$bm_api_dns booting"
 
-    while [ $config_done == 0 ]
+    while [ $api_config_done == 0 ]
     do
-        sleep 5s
-        CheckState $bm_instance_dns
-        config_done=$?
+        sleep 10s
+        CheckState $bm_api_dns
+        api_config_done=$?
+    done
+
+    if [[ $api_config_done == 1 ]]
+    then
+        bm_api_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_api_id \
+            --query 'Reservations[].Instances[].PublicIpAddress' --output text)
+    fi
+fi
+
+frontend_config=$(cat <<LINE
+#cloud-config
+
+package_update: true
+
+packages:
+ - nginx
+
+write_files:
+ - path: /etc/needrestart/needrestart.conf
+   content: \$nrconf{restart} = 'a';
+   append: true
+
+runcmd:
+ - git clone https://github.com/Koji-Sunioj/blackmetal.git /var/www/blackmetal
+ - git clone https://github.com/Koji-Sunioj/nginx-block.git /etc/nginx/sites-available/nginx-block
+ - sed -i 's/localhost:8000/${bm_api_ipv4}/g' /etc/nginx/sites-available/nginx-block/blackmetal.conf 
+ - rm /etc/nginx/sites-enabled/default
+ - ln -s /etc/nginx/sites-available/nginx-block/blackmetal.conf /etc/nginx/sites-enabled/blackmetal.conf
+ - nginx -s reload
+
+users:
+  - default
+  - name: ubuntu
+    ssh_authorized_keys:
+      - ${pub_key}
+LINE
+)
+
+if [[ ${#bm_api_ipv4} > 1 ]] && [[ $api_config_done == 1 ]]
+then
+    echo "ready to configure front end instance with ipv4 from rest API $new_bm_api_id with ip $bm_api_ipv4"
+
+    new_bm_frontend_id=$(aws ec2 run-instances --count 1 --image-id ami-0c3d6a10a198d282d \
+        --security-group-ids sg-0c6e934d0f8aa9a8e --instance-type t4g.nano \
+        --output text --query 'Instances[].InstanceId' \
+        --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=bm_frontend}]'\
+        --user-data="$frontend_config")
+    
+    echo "front end instance $new_bm_frontend_id initialized"
+    
+    bm_frontend_dns=$(aws ec2 describe-instances --instance-ids $new_bm_frontend_id \
+        --query 'Reservations[].Instances[].PublicDnsName' --output text)
+    
+    echo "$bm_frontend_dns booting"
+
+    while [ $frontend_config_done == 0 ]
+    do
+        sleep 10s
+        CheckState $bm_frontend_dns
+        frontend_config_done=$?
     done
 fi
 
-if [[ $running == 1 ]]
-then
-    echo "ready"
-    bm_server_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_instance \ 
-        --query 'Reservations[].Instances[].PublicIpAddress' --output text)
-fi
 
+if [[ $frontend_config_done == 1 ]]
+then   
+    frontend_ipv4=$(aws ec2 describe-instances --instance-ids $new_bm_frontend_id \
+        --query 'Reservations[].Instances[].PublicIpAddress' --output text)
+
+    echo "everything done. front end running at: $frontend_ipv4"
+fi
