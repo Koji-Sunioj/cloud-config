@@ -75,6 +75,7 @@ runcmd:
  - echo 'localhost:5432:blackmetal:postgres:${ROOT_DB_PASSWORD}' >> \$HOME/.pgpass
  - chmod 0600 \$HOME/.pgpass
  - export PGPASSFILE="\$HOME/.pgpass"
+ - sed -i 's/LOGIN PASSWORD/LOGIN PASSWORD '\''${DB_PASSWORD}'\''/' init.sql 
  - psql -U postgres -h localhost -d postgres -a -f init.sql
  - echo "FE_SECRET=${FE_SECRET}
  - DB_PASSWORD=${DB_PASSWORD} 
