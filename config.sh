@@ -83,7 +83,7 @@ runcmd:
  - rm /etc/nginx/sites-enabled/default
  - ln -s /etc/nginx/sites-available/fast-api.conf /etc/nginx/sites-enabled/fast-api.conf
  - nginx -s reload
- - gunicorn -k uvicorn.workers.UvicornWorker -D fast:app
+ - gunicorn -k uvicorn.workers.UvicornWorker -D main:app
 
 users:
   - default
